@@ -70,31 +70,49 @@ def get_pca(model, num_classes, feature_list, train_loader):
             temp_list.append(0)
         list_features.append(temp_list)
     
-    layer_data = [[] for _ in range(num_output)]
-    
-    batch_num = 0
-    for data, target in train_loader:
-        total += data.size(0)
-        data = data.cuda()
-        data = Variable(data, volatile=True)
-        output, out_features = model.feature_list(data)
-        print(batch_num)
-        batch_num = batch_num+1
-        
-        # get hidden features
-        for i in range(num_output):
-            ## flatten features to Batchsize x 1,
-            layer_data[i].append(out_features[i].view(out_features[i].size(0), -1))
-            # out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
-            # out_features[i] = torch.mean(out_features[i].data, 2)
-    
+    # layer_data = [[] for _ in range(num_output)]
+    #
+    # for data, target in train_loader:
+    #     total += data.size(0)
+    #     data = data.cuda()
+    #     data = Variable(data, volatile=True)
+    #     output, out_features = model.feature_list(data)
+    #
+    #
+    #     # get hidden features
+    #     for i in range(num_output):
+    #         ## flatten features to Batchsize x 1,
+    #         layer_data[i].append(out_features[i].view(out_features[i].size(0), -1))
+    #         # out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
+    #         # out_features[i] = torch.mean(out_features[i].data, 2)
+    # for i in range(num_output):
+    #     layer_data[i] = torch.cat(layer_data[i], 0)
+    #     num_channels = out_features[i].size(1)
+    #     svd_result_layer = PCA_svd(layer_data[i], k=num_channels)
+    #     svd_result.append(svd_result_layer)
+    #
+
+
     svd_result = []
-    for i in range(num_output):
-        layer_data[i] = torch.cat(layer_data[i], 0)
+    layer_num = 0
+    for i in range (num_output): ## iterating over layers
+        print(layer_num)
+        layer_num += 1
+        layer_data = []
+        batch_num = 0
+        for data, target in train_loader:
+            print(batch_num)
+            batch_num += 1
+            total += data.size(0)
+            data = data.cuda()
+            data = Variable(data, volatile=True)
+            output, out_features = model.feature_list(data)
+            layer_data.append(out_features[i].view(out_features[i].size(0), -1))
+        layer_data= torch.cat(layer_data, 0)
         num_channels = out_features[i].size(1)
-        svd_result_layer = PCA_svd(layer_data[i], k=num_channels)
+        svd_result_layer = PCA_svd(layer_data, k=num_channels)
         svd_result.append(svd_result_layer)
-    
+
     return svd_result
 
 def sample_estimator(model, num_classes, feature_list, train_loader, svd_result):
