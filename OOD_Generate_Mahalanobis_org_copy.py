@@ -72,20 +72,17 @@ def main():
     for out in temp_list:
         feature_list[count] = out.size(1)
         count += 1
-    
-################################ edits
-    print("Calculate SVD before getting sample mean and variance")
-    svd_result= lib_generation.get_pca(model, args.num_classes, feature_list, train_loader)
+        
     print('get sample mean and covariance')
-    sample_mean, precision = lib_generation.sample_estimator(model, args.num_classes, feature_list, train_loader,svd_result)
-################################ edits_end_sample_generator
+    sample_mean, precision = lib_generation.sample_estimator(model, args.num_classes, feature_list, train_loader)
+    
     print('get Mahalanobis scores')
     m_list = [0.0, 0.01, 0.005, 0.002, 0.0014, 0.001, 0.0005]
     for magnitude in m_list:
         print('Noise: ' + str(magnitude))
         for i in range(num_output):
             M_in = lib_generation.get_Mahalanobis_score(model, test_loader, args.num_classes, args.outf, \
-                                                        True, args.net_type, sample_mean, precision, i, magnitude,svd_result)
+                                                        True, args.net_type, sample_mean, precision, i, magnitude)
             M_in = np.asarray(M_in, dtype=np.float32)
             if i == 0:
                 Mahalanobis_in = M_in.reshape((M_in.shape[0], -1))
@@ -97,7 +94,7 @@ def main():
             print('Out-distribution: ' + out_dist) 
             for i in range(num_output):
                 M_out = lib_generation.get_Mahalanobis_score(model, out_test_loader, args.num_classes, args.outf, \
-                                                             False, args.net_type, sample_mean, precision, i, magnitude,svd_result)
+                                                             False, args.net_type, sample_mean, precision, i, magnitude)
                 M_out = np.asarray(M_out, dtype=np.float32)
                 if i == 0:
                     Mahalanobis_out = M_out.reshape((M_out.shape[0], -1))
