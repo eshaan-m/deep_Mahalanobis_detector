@@ -19,7 +19,8 @@ parser = argparse.ArgumentParser(description='PyTorch code: Mahalanobis detector
 parser.add_argument('--batch_size', type=int, default=200, metavar='N', help='batch size for data loader')
 parser.add_argument('--dataset', required=True, help='cifar10 | cifar100 | svhn')
 parser.add_argument('--dataroot', default='./data', help='path to dataset')
-parser.add_argument('--outf', default='./output/', help='folder to output results')
+parser.add_argument('--outf', default='./pca_output/', help='folder to output results')
+# parser.add_argument('--outf', default='./output/', help='folder to output results')
 parser.add_argument('--num_classes', type=int, default=10, help='the # of classes')
 parser.add_argument('--net_type', required=True, help='resnet | densenet')
 parser.add_argument('--gpu', type=int, default=0, help='gpu index')
@@ -75,9 +76,11 @@ def main():
     
 ################################ edits
     print("Calculate SVD before getting sample mean and variance")
-    svd_result= lib_generation.get_pca(model, args.num_classes, feature_list, train_loader)
+    # svd_result= lib_generation.get_pca(model, args.num_classes, feature_list, train_loader)
+    # lib_generation.get_pca_incremental(model, args.num_classes, feature_list, train_loader,args)
+    svd_result = None
     print('get sample mean and covariance')
-    sample_mean, precision = lib_generation.sample_estimator(model, args.num_classes, feature_list, train_loader,svd_result)
+    sample_mean, precision = lib_generation.sample_estimator(model, args.num_classes, feature_list, train_loader,svd_result,args)
 ################################ edits_end_sample_generator
     print('get Mahalanobis scores')
     m_list = [0.0, 0.01, 0.005, 0.002, 0.0014, 0.001, 0.0005]
@@ -85,7 +88,7 @@ def main():
         print('Noise: ' + str(magnitude))
         for i in range(num_output):
             M_in = lib_generation.get_Mahalanobis_score(model, test_loader, args.num_classes, args.outf, \
-                                                        True, args.net_type, sample_mean, precision, i, magnitude,svd_result)
+                                                        True, args.net_type, sample_mean, precision, i, magnitude,svd_result,args)
             M_in = np.asarray(M_in, dtype=np.float32)
             if i == 0:
                 Mahalanobis_in = M_in.reshape((M_in.shape[0], -1))
@@ -97,7 +100,7 @@ def main():
             print('Out-distribution: ' + out_dist) 
             for i in range(num_output):
                 M_out = lib_generation.get_Mahalanobis_score(model, out_test_loader, args.num_classes, args.outf, \
-                                                             False, args.net_type, sample_mean, precision, i, magnitude,svd_result)
+                                                             False, args.net_type, sample_mean, precision, i, magnitude,svd_result,args)
                 M_out = np.asarray(M_out, dtype=np.float32)
                 if i == 0:
                     Mahalanobis_out = M_out.reshape((M_out.shape[0], -1))

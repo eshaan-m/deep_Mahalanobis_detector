@@ -6,6 +6,9 @@ import torch.nn.functional as F
 
 from torch.autograd import Variable
 from scipy.spatial.distance import pdist, cdist, squareform
+from sklearn.decomposition import IncrementalPCA
+import pickle
+import os
 
 # lid of a batch of query points X
 def mle_batch(data, batch, k):
@@ -44,22 +47,118 @@ def merge_and_generate_labels(X_pos, X_neg):
 
 ################edits
 
-def PCA_svd(X, k, center=True):
-    n = X.size()[0]
-    ones = torch.ones(n).view([n, 1])
-    h = ((1 / n) * torch.mm(ones, ones.t())) if center else torch.zeros(n * n).view([n, n])
-    H = torch.eye(n) - h
-    X_center = torch.mm(H.double(), X.double())
-    u, s, v = torch.svd(X_center)
-    components = v[:k].t()
-    explained_variance = torch.mul(s[:k], s[:k]) / (n - 1)
-    return {'k': k, 'components': components,
-            'explained_variance': explained_variance}
+# def PCA_svd(X, k, center=True):
+#     n = X.size()[0]
+#     ones = torch.ones(n).view([n, 1])
+#     h = ((1 / n) * torch.mm(ones, ones.t())) if center else torch.zeros(n * n).view([n, n])
+#     H = torch.eye(n) - h
+#     X_center = torch.mm(H.double(), X.double())
+#     u, s, v = torch.svd(X_center)
+#     components = v[:k].t()
+#     explained_variance = torch.mul(s[:k], s[:k]) / (n - 1)
+#     return {'k': k, 'components': components,
+#             'explained_variance': explained_variance}
+#
+# def get_pca(model, num_classes, feature_list, train_loader):
+#     model.eval()
+#     # group_lasso = sklearn.covariance.EmpiricalCovariance(assume_centered=False)
+#     correct, total = 0, 0
+#     num_output = len(feature_list)
+#     num_sample_per_class = np.empty(num_classes)
+#     num_sample_per_class.fill(0)
+#     list_features = []
+#     for i in range(num_output):
+#         temp_list = []
+#         for j in range(num_classes):
+#             temp_list.append(0)
+#         list_features.append(temp_list)
+#
+#     # layer_data = [[] for _ in range(num_output)]
+#     #
+#     # for data, target in train_loader:
+#     #     total += data.size(0)
+#     #     data = data.cuda()
+#     #     data = Variable(data, volatile=True)
+#     #     output, out_features = model.feature_list(data)
+#     #
+#     #
+#     #     # get hidden features
+#     #     for i in range(num_output):
+#     #         ## flatten features to Batchsize x 1,
+#     #         layer_data[i].append(out_features[i].view(out_features[i].size(0), -1))
+#     #         # out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
+#     #         # out_features[i] = torch.mean(out_features[i].data, 2)
+#     # for i in range(num_output):
+#     #     layer_data[i] = torch.cat(layer_data[i], 0)
+#     #     num_channels = out_features[i].size(1)
+#     #     svd_result_layer = PCA_svd(layer_data[i], k=num_channels)
+#     #     svd_result.append(svd_result_layer)
+#     #
+#
+#
+#     svd_result = []
+#     layer_num = 0
+#     for i in range (num_output): ## iterating over layers
+#         print(layer_num)
+#         layer_num += 1
+#         layer_data = []
+#         batch_num = 0
+#         with torch.no_grad():
+#             for data, target in train_loader:
+#                 print(batch_num)
+#                 batch_num += 1
+#                 total += data.size(0)
+#                 data = data.cuda()
+#                 data = Variable(data)
+#                 # data = Variable(data, volatile=True)
+#                 output, out_features = model.feature_list(data)
+#                 layer_data.append(out_features[i].view(out_features[i].size(0), -1)) ## either save or project at this stage
+#             layer_data= torch.cat(layer_data, 0)
+#             num_channels = out_features[i].size(1)
+#             svd_result_layer = PCA_svd(layer_data, k=num_channels)
+#             svd_result.append(svd_result_layer)
+#
+#     return svd_result
+# eigen decomposition
+def sorted_eigendecomposition(cov_batch_wise):
+    eigenvalues, eigenvectors = torch.eig(cov_batch_wise, eigenvectors=True)
+    real_eigenvalues = eigenvalues[:, 0]
+    sorted_idx = torch.argsort(real_eigenvalues, descending=True)
+    return eigenvalues[sorted_idx, 0], eigenvectors[:, sorted_idx]
+
+
+def reduced_eigendecomposition(X, k: int = 2):
+    eig_val, eig_vec = sorted_eigendecomposition(X)
+    eig_val = eig_val[:k]
+    eig_vec = eig_vec[:, :k]
+    return eig_val, eig_vec
+
+
+def dimensionality_reduction(data, covariance, k: int = 2):
+    eig_val, eig_vec = reduced_eigendecomposition(covariance, k=k)
+    data_red = torch.mm(data, eig_vec)
+    return torch.mm(data_red, eig_vec.t())
+
+
+def low_rank_approximation(X, k: int = 2):
+    eig_val, eig_vec = reduced_eigendecomposition(X, k=k)
+    return torch.mm(torch.mm(eig_vec, torch.diag(eig_val)), eig_vec.t())
+
+
+def reduce_to_kdim(data, eig_val, eig_vec):
+    data_red = torch.mm(data, eig_vec)
+    return torch.mm(data_red, eig_vec.t())
+
+
+def top_kdim(X, k: int = 2):
+    eig_val, eig_vec = sorted_eigendecomposition(X)
+    eig_val = eig_val[:k]
+    eig_vec = eig_vec[:, :k]
+    return {'eig_val': eig_val, 'eig_vec': eig_vec}
+
 
 def get_pca(model, num_classes, feature_list, train_loader):
     model.eval()
-    # group_lasso = sklearn.covariance.EmpiricalCovariance(assume_centered=False)
-    correct, total = 0, 0
     num_output = len(feature_list)
     num_sample_per_class = np.empty(num_classes)
     num_sample_per_class.fill(0)
@@ -70,52 +169,122 @@ def get_pca(model, num_classes, feature_list, train_loader):
             temp_list.append(0)
         list_features.append(temp_list)
     
-    # layer_data = [[] for _ in range(num_output)]
-    #
-    # for data, target in train_loader:
-    #     total += data.size(0)
-    #     data = data.cuda()
-    #     data = Variable(data, volatile=True)
-    #     output, out_features = model.feature_list(data)
-    #
-    #
-    #     # get hidden features
-    #     for i in range(num_output):
-    #         ## flatten features to Batchsize x 1,
-    #         layer_data[i].append(out_features[i].view(out_features[i].size(0), -1))
-    #         # out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
-    #         # out_features[i] = torch.mean(out_features[i].data, 2)
-    # for i in range(num_output):
-    #     layer_data[i] = torch.cat(layer_data[i], 0)
-    #     num_channels = out_features[i].size(1)
-    #     svd_result_layer = PCA_svd(layer_data[i], k=num_channels)
-    #     svd_result.append(svd_result_layer)
-    #
+    low_rank_result = []
+    for i in range(num_output):  ## iterating over layers
+        with torch.no_grad():
+            N = len(train_loader.dataset)
+            ## get dimension size for the layer and batch size
+            for data, target in train_loader:
+                data = data.cuda()
+                data = Variable(data)
+                # data = Variable(data, volatile=True)
+                output, out_features = model.feature_list(data)
+                num_channels = out_features[i].size(1)
+                layer_data = out_features[i].view(out_features[i].size(0), -1)
+                batch_size = layer_data.shape[0]
+                D = layer_data.shape[1]
+                print("Channels: ",  out_features[i].size(1) )
+                print("Channel Dim: ",out_features[i].size(2),"X",out_features[i].size(3) )
+                print("Effective D: ", D)
+                print ("Batch Size: ", batch_size)
+                break
+            
+            ## compute mean batch-wise
+            mean = torch.zeros((1, D))
+            total = 0
+            for data, target in train_loader:
+                data = data.cuda()
+                data = Variable(data)
+                output, out_features = model.feature_list(data)
+                layer_data = out_features[i].view(out_features[i].size(0), -1)
+                layer_data = layer_data.to('cpu')
+                mean = total / (total + batch_size) * mean + batch_size / (total + batch_size) * layer_data.mean(0, keepdim=True)
+                total += batch_size
+            
+            # compute covariance in batches
+            cov_batch_wise = np.zeros((D, D),dtype=np.float16)
+            for data, target in train_loader:
+                data = data.cuda()
+                data = Variable(data)
+                output, out_features = model.feature_list(data)
+                layer_data = out_features[i].view(out_features[i].size(0), -1)
+                layer_data = layer_data.to('cpu')
+                ## center the data before computing covariance
+                batch_diff = layer_data - mean
+                batch_cov = torch.mm(batch_diff.t(), batch_diff)
+                cov_batch_wise += batch_cov
+            cov_batch_wise = cov_batch_wise / (N - 1)
+            
+            ## get low rank approximation of the covariance matrix
+            low_rank_layer = top_kdim(cov_batch_wise, k=num_channels)
+            low_rank_result.append(low_rank_layer)
+    
+    return low_rank_result
 
 
-    svd_result = []
-    layer_num = 0
-    for i in range (num_output): ## iterating over layers
-        print(layer_num)
-        layer_num += 1
-        layer_data = []
-        batch_num = 0
-        for data, target in train_loader:
-            print(batch_num)
-            batch_num += 1
-            total += data.size(0)
-            data = data.cuda()
-            data = Variable(data, volatile=True)
-            output, out_features = model.feature_list(data)
-            layer_data.append(out_features[i].view(out_features[i].size(0), -1))
-        layer_data= torch.cat(layer_data, 0)
-        num_channels = out_features[i].size(1)
-        svd_result_layer = PCA_svd(layer_data, k=num_channels)
-        svd_result.append(svd_result_layer)
+def get_pca_incremental(model, num_classes, feature_list, train_loader, args):
+    ## batch_size preferably 1024 since num of elements need be greater than the number of components --> 512 for layer 4
+    model.eval()
+    num_output = len(feature_list)
+    num_sample_per_class = np.empty(num_classes)
+    num_sample_per_class.fill(0)
+    list_features = []
+    for i in range(num_output):
+        temp_list = []
+        for j in range(num_classes):
+            temp_list.append(0)
+        list_features.append(temp_list)
+    
+    low_rank_result = []
+    with torch.no_grad():
+        for i in range(num_output):  ## iterating over layers
+            ## get dimension size for the layer and batch size
+            for data, target in train_loader:
+                data = data.cuda()
+                data = Variable(data)
+                # data = Variable(data, volatile=True)
+                output, out_features = model.feature_list(data)
+                num_channels = out_features[i].size(1)
+                layer_data = out_features[i].view(out_features[i].size(0), -1)
+                batch_size = layer_data.shape[0]
+                D = layer_data.shape[1]
+                print("layer number: ",i)
+                print("Channels: ", out_features[i].size(1))
+                print("Channel Dim: ", out_features[i].size(2), "X", out_features[i].size(3))
+                print("Effective D: ", D)
+                print("Batch Size: ", batch_size)
+                break
+            
+            ## compute mean batch-wise
+            mean = torch.zeros((1, D))
+            total = 0
+            for data, target in train_loader:
+                data = data.cuda()
+                data = Variable(data)
+                output, out_features = model.feature_list(data)
+                layer_data = out_features[i].view(out_features[i].size(0), -1)
+                layer_data = layer_data.to('cpu')
+                mean = total / (total + batch_size) * mean + batch_size / (total + batch_size) * layer_data.mean(0, keepdim=True)
+                total += batch_size
 
-    return svd_result
+            # compute incremental pca
+            i_pca = IncrementalPCA(n_components=num_channels, batch_size=batch_size)
+            for data, target in train_loader:
+                data = data.cuda()
+                data = Variable(data)
+                output, out_features = model.feature_list(data)
+                layer_data = out_features[i].view(out_features[i].size(0), -1)
+                layer_data = layer_data.to('cpu')
+                ## center the data before computing covariance
+                batch_diff = layer_data - mean
+                i_pca.partial_fit(batch_diff)
+            ## get low rank approximation of the covariance matrix
+            file_pca_name = os.path.join(args.outf, 'pca_layer_num_output_%s_%s_%s.pkl' % (str(i), args.dataset, args.net_type))
+            pickle.dump(i_pca, open(file_pca_name, 'wb'))
+            del i_pca
 
-def sample_estimator(model, num_classes, feature_list, train_loader, svd_result):
+
+def sample_estimator(model, num_classes, feature_list, train_loader, svd_result,args):
     """
     compute sample mean and precision (inverse of covariance)
     return: sample_class_mean: list of class mean
@@ -137,39 +306,50 @@ def sample_estimator(model, num_classes, feature_list, train_loader, svd_result)
         list_features.append(temp_list)
     
     for data, target in train_loader:
-        total += data.size(0)
-        data = data.cuda()
-        data = Variable(data, volatile=True)
-        output, out_features = model.feature_list(data)
-        
-        # get hidden features
-        for i in range(num_output):
-            # out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
-            # out_features[i] = torch.mean(out_features[i].data, 2)
-            tx = svd_result[i]['components']
-            temp_layer_data = out_features[i].view(out_features[i].size(0), -1)
-            out_features[i] = torch.mm(tx.t(), temp_layer_data)
-        
-        # compute the accuracy
-        pred = output.data.max(1)[1]
-        equal_flag = pred.eq(target.cuda()).cpu()
-        correct += equal_flag.sum()
-        
-        # construct the sample matrix
-        for i in range(data.size(0)):
-            label = target[i]
-            if num_sample_per_class[label] == 0:
-                out_count = 0
-                for out in out_features:
-                    list_features[out_count][label] = out[i].view(1, -1)
-                    out_count += 1
-            else:
-                out_count = 0
-                for out in out_features:
-                    list_features[out_count][label] \
-                        = torch.cat((list_features[out_count][label], out[i].view(1, -1)), 0)
-                    out_count += 1
-            num_sample_per_class[label] += 1
+        with torch.no_grad():
+            total += data.size(0)
+            data = data.cuda()
+            # data = Variable(data, volatile=True)
+            data = Variable(data)
+            output, out_features = model.feature_list(data)
+            
+            # get hidden features
+            for i in range(num_output):
+                # out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
+                # out_features[i] = torch.mean(out_features[i].data, 2)
+            
+                # tx = svd_result[i]
+                # temp_layer_data = out_features[i].view(out_features[i].size(0), -1)
+                # out_features[i] = reduce_to_kdim(temp_layer_data, **tx)
+            
+                file_pca_name = os.path.join(args.outf, 'pca_layer_num_output_%s_%s_%s.pkl' % (str(i), args.dataset, args.net_type))
+                loaded_ipca = pickle.load(open(file_pca_name, 'rb'))
+                temp_layer_data = out_features[i].view(out_features[i].size(0), -1)
+                temp_layer_data = temp_layer_data.to('cpu')
+                transformed_data = loaded_ipca.transform(temp_layer_data)
+                out_features[i] = torch.from_numpy(transformed_data).float().cuda()
+                del loaded_ipca
+                
+            # compute the accuracy
+            pred = output.data.max(1)[1]
+            equal_flag = pred.eq(target.cuda()).cpu()
+            correct += equal_flag.sum()
+            
+            # construct the sample matrix
+            for i in range(data.size(0)):
+                label = target[i]
+                if num_sample_per_class[label] == 0:
+                    out_count = 0
+                    for out in out_features:
+                        list_features[out_count][label] = out[i].view(1, -1)
+                        out_count += 1
+                else:
+                    out_count = 0
+                    for out in out_features:
+                        list_features[out_count][label] \
+                            = torch.cat((list_features[out_count][label], out[i].view(1, -1)), 0)
+                        out_count += 1
+                num_sample_per_class[label] += 1
     
     sample_class_mean = []
     out_count = 0
@@ -200,7 +380,7 @@ def sample_estimator(model, num_classes, feature_list, train_loader, svd_result)
     return sample_class_mean, precision
 
 
-def get_Mahalanobis_score(model, test_loader, num_classes, outf, out_flag, net_type, sample_mean, precision, layer_index, magnitude, svd_result):
+def get_Mahalanobis_score(model, test_loader, num_classes, outf, out_flag, net_type, sample_mean, precision, layer_index, magnitude, svd_result,args):
     '''
 	Compute the proposed Mahalanobis confidence score on input dataset
 	return: Mahalanobis score from layer_index
@@ -224,10 +404,21 @@ def get_Mahalanobis_score(model, test_loader, num_classes, outf, out_flag, net_t
         # out_features = out_features.view(out_features.size(0), out_features.size(1), -1)
         # out_features = torch.mean(out_features, 2)
         
-        tx = svd_result[layer_index]['components']
+        # tx = svd_result[layer_index]
+        # temp_layer_data = out_features.view(out_features.size(0), -1)
+        # out_features = reduce_to_kdim(temp_layer_data, **tx)
+
+        file_pca_name = os.path.join(args.outf, 'pca_layer_num_output_%s_%s_%s.pkl' % (str(layer_index), args.dataset, args.net_type))
+        loaded_ipca = pickle.load(open(file_pca_name, 'rb'))
+        ipca_components = torch.from_numpy(loaded_ipca.components_).float().cuda()
         temp_layer_data = out_features.view(out_features.size(0), -1)
-        out_features = torch.mm(tx.t(), temp_layer_data)
-        
+        out_features = torch.mm(temp_layer_data,ipca_components.t())
+        # temp_layer_data = temp_layer_data.to('cpu')
+        # temp_layer_data = temp_layer_data.detach().numpy()
+        # transformed_data = loaded_ipca.transform(temp_layer_data)
+        # out_features = torch.from_numpy(transformed_data).float().cuda()
+        # out_features = Variable(out_features, requires_grad=True)
+
         # compute Mahalanobis score
         gaussian_score = 0
         for i in range(num_classes):
@@ -260,8 +451,15 @@ def get_Mahalanobis_score(model, test_loader, num_classes, outf, out_flag, net_t
         tempInputs = torch.add(data.data, -magnitude, gradient)
         
         noise_out_features = model.intermediate_forward(Variable(tempInputs, volatile=True), layer_index)
-        noise_out_features = noise_out_features.view(noise_out_features.size(0), noise_out_features.size(1), -1)
-        noise_out_features = torch.mean(noise_out_features, 2)
+        ################################################################# make edits here too
+        
+        
+        # noise_out_features = noise_out_features.view(noise_out_features.size(0), noise_out_features.size(1), -1)
+        # noise_out_features = torch.mean(noise_out_features, 2)
+
+        temp_noise_out_features = noise_out_features.view(noise_out_features.size(0),-1)
+        noise_out_features = torch.mm(temp_noise_out_features, ipca_components.t())
+        
         noise_gaussian_score = 0
         for i in range(num_classes):
             batch_sample_mean = sample_mean[layer_index][i]
