@@ -1,0 +1,13 @@
+Made copies of original files to experiment with generative modelling on Mahalanobis Scores
+
+mahalanobis_gen.py ---> adapted from OOD_Generate_Mahalanobis.py
+mahalanobis_ood.py --> adapted from OOD_Regression_Mahalanobis.py
+lib_generation_gen.py --> adapted from lib_generation.py
+lib_reg_gen.py --> adapted from lib_regression.py
+adv_reg_gen.py --> adapted from ADV_Regression.py
+
+added_files :
+check_gaussian.py : plot histograms of activations to check their gaussianity
+data_dim.py : Dimensionality reduction using Random Projections
+get_all_activations.py : Store all the activations, without applying any dimensionality reduction
+plot_mahalanobis.py: To fit a GMM to the log() of Mahalanobis scores  
