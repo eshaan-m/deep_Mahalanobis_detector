@@ -46,7 +46,7 @@ def getCIFAR10(batch_size, TF, data_root='/tmp/public_dataset/pytorch', train=Tr
             datasets.CIFAR10(
                 root=data_root, train=True, download=True,
                 transform=TF),
-            batch_size=batch_size, shuffle=True, **kwargs)
+            batch_size=batch_size, shuffle=False, **kwargs)
         ds.append(train_loader)
     if val:
         test_loader = torch.utils.data.DataLoader(

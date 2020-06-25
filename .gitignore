@@ -2,6 +2,9 @@
 lib/__pycache__
 data/*
 output/*
+pca_output/*
+gen_output/*
+gmm_multiclass_output/*
 pre_trained/*
 adv_output/*
 libs/__pycache__
@@ -9,3 +12,4 @@ libs/transformations/__pycache__
 *.ipynb_checkpoints
 __pycache__
 models/__pycache__
+.DS_Store

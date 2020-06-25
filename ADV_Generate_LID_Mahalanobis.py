@@ -10,7 +10,9 @@ import numpy as np
 import calculate_log as callog
 import models
 import os
-import lib_generation
+# import lib_generation
+import lib_generation_org_copy as lib_generation
+
 
 from torchvision import transforms
 from torch.autograd import Variable
@@ -94,12 +96,13 @@ def main():
         list_counter += 1
     
     print('get Mahalanobis scores')
-    m_list = [0.0, 0.01, 0.005, 0.002, 0.0014, 0.001, 0.0005]
+    # m_list = [0.0, 0.01, 0.005, 0.002, 0.0014, 0.001, 0.0005]
+    m_list = [0.0]
+
     for magnitude in m_list:
         print('\nNoise: ' + str(magnitude))
         for i in range(num_output):
-            M_in \
-            = lib_generation.get_Mahalanobis_score_adv(model, test_clean_data, test_label, \
+            M_in = lib_generation.get_Mahalanobis_score_adv(model, test_clean_data, test_label, \
                                                        args.num_classes, args.outf, args.net_type, \
                                                        sample_mean, precision, i, magnitude)
             M_in = np.asarray(M_in, dtype=np.float32)
